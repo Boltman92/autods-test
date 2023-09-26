@@ -1,16 +1,17 @@
-import React, { useState, ReactNode } from "react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
-import "./App.css";
-import { FormWrapper } from "./components/FormWrapper";
+import { InputField } from "./components/InputField";
 import { useYupValidationResolver } from "./hooks/useYupValidationResolver";
 
-import { FormValues, ValidationFieldsObject } from "./interfaces";
+import { FormValues } from "./interfaces";
 import { PaymentMethodEnum } from "./enums";
 import { validationSchema } from "./utils";
-import {
-  EMAIL_ERROR_MESSAGE,
-  INVALID_PAYMENT_CARD_ERROR_MESSAGE,
-} from "./constants";
+import get from "lodash.get";
+import { RADIO_BUTTONS, validationByStep } from "./constants";
+import { RadioButtonField } from "./components/RadioButtonField";
+
+import "./App.css";
+import { useEffect } from "react";
 
 function App() {
   const resolver = useYupValidationResolver<FormValues>(validationSchema);
@@ -21,28 +22,36 @@ function App() {
     watch,
     register,
     trigger,
+    unregister,
   } = useForm<FormValues>({
     resolver,
     defaultValues: { paymentMethod: { type: PaymentMethodEnum.PAYPAL } },
+    reValidateMode: "onSubmit",
   });
 
   const paymentType = watch("paymentMethod")?.type;
 
   const [stepIndex, setStepIndex] = useState(0);
 
-  const onSubmit = (values: FormValues) => {
-    console.log(values, "values");
-  };
+  const onSubmit = (data: FormValues) => {
+    const [firstName, lastName] = data.fullName.split(" ");
 
-  const validationByStep: ValidationFieldsObject = {
-    0: "fullName",
-    1: ["email", "password", "confirmPassword"],
+    const result = {
+      firstName,
+      lastName,
+      password: data.password,
+      confirmPassword: data.confirmPassword,
+      paymentMethod: data.paymentMethod,
+    };
+
+    console.log(result);
   };
 
   const handleClickNext = async () => {
-    const index = validationByStep[stepIndex];
+    const validationField = validationByStep[stepIndex];
 
-    const isFieldValid = await trigger(index);
+    const isFieldValid = await trigger(validationField);
+
     if (isFieldValid) {
       setStepIndex((prev) => prev + 1);
     }
@@ -52,82 +61,88 @@ function App() {
     setStepIndex((prev) => prev - 1);
   };
 
-  const isError = Object.keys(errors).length > 0;
+  useEffect(() => {
+    if (paymentType === PaymentMethodEnum.CREDIT) {
+      unregister("paymentMethod.email");
+    } else {
+      unregister("paymentMethod.creditCard");
+    }
+  }, [paymentType, unregister]);
 
-  const arrayOfSteps: ReactNode[] = [
-    <FormWrapper title="write your full name">
-      <input className="input" {...register("fullName")} />
-      {errors.fullName && (
-        <div className="error">{errors.fullName?.message}</div>
-      )}
-    </FormWrapper>,
+  const paymentCardError = get(errors, "paymentMethod.creditCard");
 
-    <FormWrapper title="write your email and password">
-      <div>Email: </div>
-      <input className="input" {...register("email")} />
-      {errors.email && <div className="error">{errors.email?.message}</div>}
-
-      <div>Password: </div>
-      <input className="input" {...register("password")} type="password" />
-      {errors.password && (
-        <div className="error">{errors.password?.message}</div>
-      )}
-
-      <div>Confirm Password: </div>
-      <input
-        className="input"
-        {...register("confirmPassword")}
-        type="password"
-      />
-      {errors.confirmPassword && (
-        <div className="error">{errors.confirmPassword?.message}</div>
-      )}
-    </FormWrapper>,
-
-    <FormWrapper title="choose your payment method">
-      <>
-        <div className="radio">
-          <div className="row">
-            <input
-              {...register("paymentMethod.type")}
-              type="radio"
-              value={PaymentMethodEnum.PAYPAL}
-            />
-            <label className="label">paypal</label>
-          </div>
-          <div className="row">
-            <input
-              {...register("paymentMethod.type")}
-              type="radio"
-              value={PaymentMethodEnum.CREDIT}
-            />
-            <label className="label">Credit card</label>
-          </div>
-        </div>
-
-        {paymentType === PaymentMethodEnum.CREDIT ? (
-          <>
-            <div>type your credit card number: </div>
-            <input {...register("paymentMethod.paymentCard")} />
-            {isError && (
-              <div className="error">{INVALID_PAYMENT_CARD_ERROR_MESSAGE}</div>
-            )}
-          </>
-        ) : (
-          <>
-            <div>type your paypal email: </div>
-            <input {...register("paymentMethod.paymentEmail")} />
-            {isError && <div className="error">{EMAIL_ERROR_MESSAGE}</div>}
-          </>
-        )}
-      </>
-    </FormWrapper>,
-  ];
+  const paymentEmailError = get(errors, "paymentMethod.email");
 
   return (
     <div>
       <form onSubmit={handleSubmit(onSubmit)} className="container">
-        {arrayOfSteps[stepIndex]}
+        {stepIndex === 0 && (
+          <>
+            <h2>First step: Personal info</h2>
+            <InputField
+              description="write name and surname"
+              name="fullName"
+              isError={!!errors.fullName}
+              register={register}
+              errorMessage={errors.fullName?.message}
+            />
+          </>
+        )}
+        {stepIndex === 1 && (
+          <>
+            <h2>Second Step: Email and Password</h2>
+            <InputField
+              name="email"
+              description="Email:"
+              register={register}
+              isError={!!errors.email}
+              errorMessage={errors.email?.message}
+            />
+            <InputField
+              name="password"
+              description="Set password:"
+              register={register}
+              isError={!!errors.password}
+              errorMessage={errors.password?.message}
+              type="password"
+            />
+            <InputField
+              name="confirmPassword"
+              description="confirm password:"
+              register={register}
+              isError={!!errors.confirmPassword}
+              errorMessage={errors.confirmPassword?.message}
+              type="password"
+            />
+          </>
+        )}
+        {stepIndex === 2 && (
+          <>
+            <h2>Step 3: enter payment method</h2>
+            <RadioButtonField
+              radioButton={RADIO_BUTTONS}
+              register={register}
+              name={"paymentMethod.type" as keyof FormValues}
+            />
+            {paymentType === PaymentMethodEnum.CREDIT ? (
+              <InputField
+                name={"paymentMethod.creditCard" as keyof FormValues}
+                description="type your credit card number:"
+                register={register}
+                isError={!!paymentCardError}
+                errorMessage={paymentCardError?.message}
+              />
+            ) : (
+              <InputField
+                name={"paymentMethod.email" as keyof FormValues}
+                description="type your paypal email:"
+                register={register}
+                isError={!!paymentEmailError}
+                errorMessage={paymentEmailError?.message}
+              />
+            )}
+          </>
+        )}
         <div className="button">
           {stepIndex > 0 && (
             <button onClick={handleClickBack} type="button">

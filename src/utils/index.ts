@@ -43,16 +43,15 @@ export const validationSchema = object().shape({
     .required(REQUIRED),
   paymentMethod: object({
     type: mixed().oneOf([PaymentMethodEnum.CREDIT, PaymentMethodEnum.PAYPAL]),
-    paymentEmail: string().when("type", {
+    email: string().when("type", {
       is: PaymentMethodEnum.PAYPAL,
-      then: (schema) => schema.required().email(),
+      then: (schema) => schema.required(REQUIRED).email(EMAIL_ERROR_MESSAGE),
     }),
-    paymentCard: string()
-      .required()
+    creditCard: string()
       .when("type", {
         is: PaymentMethodEnum.CREDIT,
         then: (schema) =>
-          schema.test(
+          schema.required(REQUIRED).test(
             "isValidCard",
             INVALID_PAYMENT_CARD_ERROR_MESSAGE,
             (value) => validateLuhnAlgorithm(value)

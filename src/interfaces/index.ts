@@ -7,8 +7,8 @@ export interface FormValues {
   confirmPassword: string;
   paymentMethod: {
     type: PaymentMethodEnum;
-    paymentEmail?: string;
-    paymentCard?: string;
+    email?: string;
+    creditCard?: string;
   };
 }
 
